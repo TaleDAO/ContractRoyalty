@@ -7,8 +7,8 @@ helping composers to confirm the ownership and the income of their works in a de
 See [Production Website](https://taledao.com).
 
 ## Updates
-
-Support the Ethereum Blockchain in first version.
+- Support the Ethereum Blockchain in first version.
+- Support main website as the broker, collects purchase actions and writes back the contract in batches.  
 
 **Next up:**
 

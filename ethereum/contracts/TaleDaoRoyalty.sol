@@ -20,7 +20,8 @@ contract TaleDaoRoyalty is MultiOwnable {
     uint256 public episodePrice;
 
     // Events
-    event Purchase(address indexed _from, bytes8 _episode);
+    // if _broker is null, it means _buyer purchased the compensable epicode in the contract directly
+    event Purchase(address indexed _buyer, bytes8 _episode, address _broker);
 
 	constructor(bytes8 _verseCode, address[] memory _owners, uint256[] memory _percents)
 	    MultiOwnable(_owners, _percents) {
@@ -45,7 +46,7 @@ contract TaleDaoRoyalty is MultiOwnable {
         }
     }
 
-    // Players pay for the compensable epicode
+    // Called by the reader for the compensable epicode
     function buy() payable public {
         require(episodePrice > 0);
         require(msg.value >= episodePrice);
@@ -57,7 +58,16 @@ contract TaleDaoRoyalty is MultiOwnable {
         }
 
         // TaleDAO deamon listens the event, and would let the player pass after receiving
-        emit Purchase(msg.sender, episodeCode);
+        emit Purchase(msg.sender, episodeCode, address(0x0));
+    }
+
+    // Called by the broker who writes back the purchased incomes & events in batches every day
+    function buyRollUps(address[] memory buyers) payable public {
+        require(buyers.length > 0);
+        require(msg.value >= episodePrice * buyers.length);
+        for (uint i=0; i<buyers.length; ++i) {
+            emit Purchase(buyers[i], episodeCode, msg.sender);
+        }
     }
 
     // Send the income to co-owners by their ratios
