@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: MIT
+// SafeMath is generally not needed starting with Solidity 0.8, since the compiler now has built in overflow checking.
+// Just reserve in codebase, not linked
 pragma solidity ^0.8.13;
 
 /**

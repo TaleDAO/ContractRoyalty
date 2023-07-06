@@ -1,5 +1,26 @@
 
-# IDE
+
+# dev & testing
+**/build
+/bnbchain
+/ethereum/truffle-config.js
+/ethereum/migrations
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+
+# dependencies
+**/node_modules
+/.pnp
+.pnp.js
+
+
+# misc
 **/*.pyc
 **/__pycache__
 **/.idea
@@ -9,25 +30,3 @@ __MACOSX
 *.swp
 Thumbs.db
 
-
-# dependencies
-**/node_modules
-/.pnp
-.pnp.js
-
-# testing
-/coverage
-
-# production
-**/build
-
-# misc
-.DS_Store
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*

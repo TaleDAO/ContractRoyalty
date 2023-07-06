@@ -2,45 +2,78 @@
 pragma solidity ^0.8.13;
 
 /**
- * Store addresses and percents of co-owners
+ * Store addresses and quotas of multi owners.
+ * Here 1 'quota' denotes 1% of the ownership of the royalty in the following.
+ * To reduce the complexity, NOT support float value of the quota.
  */
 contract MultiOwnable {
 
-    // Current royalties
-    uint constant internal CO_OWNER_MAX = 10;
-    uint internal co_owner_num;
-    address[CO_OWNER_MAX + 1] internal owners;
-    uint256[CO_OWNER_MAX + 1] internal percents;
+    uint constant public MAX_OWNER_SIZE = 100;
+    address[MAX_OWNER_SIZE] _ownerAddresses;
+    uint _ownerSize;
 
-    // TaleDAO official shares 1% royalty of this verse constantly
-    address constant internal taleDaoTreasury = 0xE4B33BF97A9f4D7CF0766a38CB767bE757462065;
+    mapping(address => uint) _ownedQuotas;
 
-	constructor(address[] memory _owners, uint256[] memory _percents) {
+    mapping(bytes32 => address[]) _pendingOperations;
 
-	    require(_owners.length == _percents.length);
-	    require(_owners.length <= CO_OWNER_MAX);
+    event PendingOperation(string opName, address indexed who, uint requireQuota, uint confirmedQuota);
+    event ConfirmOperation(string opName, address indexed who, uint requireQuota, uint confirmedQuota);
 
-	    uint totalPercent = 0;
+    constructor(address[] memory initOwners, uint[] memory initQuotas) {
+        require(0 < initOwners.length && initOwners.length <= MAX_OWNER_SIZE);
+        require(initOwners.length == initQuotas.length);
 
-	    for (uint i=0; i<_percents.length; ++i) {
-	        totalPercent += _percents[i];
-	        owners[i] = _owners[i];
-	        percents[i] = _percents[i];
+        uint sum = 0;
+        for (uint i=0; i<initOwners.length; i++) {
+            address a = initOwners[i];
+            _ownerAddresses[i] = a;
+            _ownedQuotas[a] = initQuotas[i];
+            sum += initQuotas[i];
         }
-        totalPercent += 1;
-        owners[_owners.length] = taleDaoTreasury;
-        percents[_owners.length] = 1;
+        require(sum == 100);
+        _ownerSize = initOwners.length;
+    }
 
-        // After init, all percerts should be 100%
-        require(totalPercent == 100);
+    modifier quotaAtLeast(uint requireQuota, bytes32 operation, string memory opName) {
+        require(0 < requireQuota && requireQuota <= 100);
+        if (checkWhetherConfirm(msg.sender, requireQuota, operation, opName)) {
+            _;
+        }
+    }
 
-        co_owner_num = _owners.length + 1;
-	}
+    function checkWhetherConfirm(address who, uint requireQuota, bytes32 operation, string memory opName) internal returns(bool) {
 
-	modifier primaryOwner() {
-	    // tx.origin is always wallet address, msg.sender can be both wallet address and another contract address
-        require(msg.sender == owners[0]);
-        _;
+        require(_ownedQuotas[who] > 0);           // Otherwise, not owner
+
+        address[] memory participants = _pendingOperations[operation];  // copy storage to memory, saving gas in iteration
+        uint confirmedQuota = 0;
+        bool isMyConfirmed = false;
+        for (uint i=0; i<participants.length; i++) {
+            address p = participants[i];
+            if (p == who) {
+                isMyConfirmed = true;
+            }
+            confirmedQuota += _ownedQuotas[p];
+        }
+        if (! isMyConfirmed) {
+            _pendingOperations[operation].push(who);
+            confirmedQuota += _ownedQuotas[who];
+        }
+
+        if (confirmedQuota >= requireQuota) {
+            delete _pendingOperations[operation];
+            emit ConfirmOperation(opName, who, requireQuota, confirmedQuota);
+            return true;
+        }
+        else {
+            emit PendingOperation(opName, who, requireQuota, confirmedQuota);
+            return false;
+        }
+    }
+
+    // Return integer. 0 means not-owner
+    function getOwnedQuota(address who) public view returns(uint) {
+        return _ownedQuotas[who];
     }
 }
 
