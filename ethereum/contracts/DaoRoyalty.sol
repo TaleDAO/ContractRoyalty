@@ -8,7 +8,7 @@ import "./Tradeable.sol";
 /**
  * The Main Contract
  */
-contract TaleDaoRoyalty is Tradeable {
+contract DaoRoyalty is Tradeable {
 
     string public taleCode;
 

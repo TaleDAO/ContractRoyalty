@@ -30,7 +30,7 @@ contract MultiOwnable {
             _ownedQuotas[a] = initQuotas[i];
             sum += initQuotas[i];
         }
-        require(sum == 100);
+        require(sum == 100, "SUN_NOT_100_PERCENT");
         _ownerSize = initOwners.length;
     }
 

@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.13;
 
-import "./Allocatable.sol";
+import "./MultiOwnable.sol";
 
 /**
  * Users can purchase the chargeable tale-episodes on the contract
  * Owners can withdraw earnings by their quotas from the contract
  */
-contract Profitable is Allocatable {
+contract Profitable is MultiOwnable {
 
     uint256 public purchasePrice = 0.01 ether;
     uint256 public minWithdraw = 0.01 ether;
@@ -31,7 +31,7 @@ contract Profitable is Allocatable {
     event Withdraw(address indexed who, uint256 value);
 
 	constructor(address[] memory initOwners, uint[] memory initQuotas)
-	    Allocatable(initOwners, initQuotas) {
+	    MultiOwnable(initOwners, initQuotas) {
 	}
 
 	receive() payable external {
@@ -68,15 +68,15 @@ contract Profitable is Allocatable {
         uint256 totalBalance = address(this).balance + _totalWithdrawn;
 
         uint myQuota = _ownedQuotas[who];
-        require(1 <= myQuota && myQuota <= 100);
+        require(1 <= myQuota && myQuota <= 100, "NOT_OWNER");
 
         uint256 myProfits = totalBalance * myQuota / 100;
         Ledger storage l = _accountLedgers[who];
         uint256 myBalance = myProfits - l.withdrawn + l.compensated - l.silenced;
 
         if (myBalance >= minWithdraw) {
-            // Note: 这里不可以设置 l.compensated = 0;
-            l.withdrawn += myBalance;              // 这里需要测试一下
+            // Notice that here cannot set l.compensated = 0 ! need more testcases
+            l.withdrawn += myBalance;
             _totalWithdrawn += myBalance;
 
             payable(who).transfer(myBalance);
