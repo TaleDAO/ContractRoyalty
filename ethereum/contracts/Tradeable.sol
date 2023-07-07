@@ -15,13 +15,14 @@ contract Tradeable is Profitable {
     // Preventing the price computed for 1 quota is zero too, this value is used as a minimum value.
     uint256 public minPricePerQuota = 0.01 ether;
 
+    // The quotas (allowed by current owners) are on sales to latent new owners by investing ETHs
     mapping(address => uint) _allowedQuotas;
 
     event AllowQuota(address indexed who, uint previous, uint current);
 
     event RemoveOwner(address indexed who);
     event AppendOwner(address indexed who);
-    event MoveQuota(address indexed fromOwner, address indexed toOwner, uint quotaToMove, uint fromOwnerRemains, uint toOwnerRemains);
+    event MoveQuota(address indexed fromOwner, address indexed toOwner, uint quotaToMove, uint fromOwnerQuota, uint toOwnerQuota);
 
 	constructor(address[] memory initOwners, uint[] memory initQuotas)
 	    Profitable(initOwners, initQuotas) {
@@ -123,7 +124,7 @@ contract Tradeable is Profitable {
         return pricePerQuota;
     }
 
-    // Randomly select allowed quotes to trade until the budget is used up
+    // To fairness, RANDOMLY select allowed quotes to trade until the budget is used up
     // Return how many quotes acquired.
     // Before calling this function, EVM has already added the value(ETH) carried in this transaction on the contract balance.
     function investAcquireQuota() payable public returns(uint) {
@@ -190,3 +191,4 @@ contract Tradeable is Profitable {
         return acquiredQuota;
     }
 }
+
