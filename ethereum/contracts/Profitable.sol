@@ -14,24 +14,33 @@ contract Profitable is MultiOwnable {
     uint256 public minRefund = 0.005 ether;
 
     struct Ledger {
-        // the ETH already withdrawn by this owner
+        // The ETH already withdrawn by this owner
         uint withdrawn;
 
         // All quotas sold have corresponding profits, the total amount appears here.
         uint compensated;
 
-        // Assume this owner bought quotas at time T1, the profit made before T1 belongs to its previous owner.
-        // the new owner can never take those profit into account. The total amount is blocked here.
+        // Assume a new owner buy quotas at time T1, the profit made before T1 belongs to its previous owner.
+        // The new owner can never take those profit into account. The total amount is blocked here.
         uint silenced;
     }
     mapping(address => Ledger) _accountLedgers;
-    uint256 _totalWithdrawn;
+
+    uint256 public totalWithdrawn;
+
+    // The amount cannot be treated as profits. (e.g. income from traded-quotas, which only belongs to one certain owner)
+    uint256 public totalInvested;
 
     event Purchase(address indexed who, uint256 value, address broker);
     event Withdraw(address indexed who, uint256 value);
 
 	constructor(address[] memory initOwners, uint[] memory initQuotas)
 	    MultiOwnable(initOwners, initQuotas) {
+	}
+
+	function sumProfit() public view returns(uint256) {
+	    uint256 profitComputed = address(this).balance + totalWithdrawn - totalInvested;
+	    return profitComputed;
 	}
 
 	receive() payable external {
@@ -60,24 +69,36 @@ contract Profitable is MultiOwnable {
         }
     }
 
+    function getBalance(address who) public view returns(uint256) {
+        uint256 profitComputed = sumProfit();
+        uint myQuota = _ownedQuotas[who];
+
+        uint256 myProfits = profitComputed * myQuota / 100;
+        Ledger storage l = _accountLedgers[who];
+        uint256 myBalance = myProfits - l.withdrawn + l.compensated - l.silenced;
+
+        if (myQuota == 0) {
+            require(myBalance == 0);
+        }
+        return myBalance;
+    }
+
     // According to quotas owned, an owner can withdraw his whole profits in current time.
     // Not support withdraw a part of profits
     // Replace previous function named 'divvy'
     function withdraw() external returns(bool) {
         address who = msg.sender;
-        uint256 totalBalance = address(this).balance + _totalWithdrawn;
 
         uint myQuota = _ownedQuotas[who];
         require(1 <= myQuota && myQuota <= 100, "NOT_OWNER");
 
-        uint256 myProfits = totalBalance * myQuota / 100;
+        uint256 myBalance = getBalance(who);
         Ledger storage l = _accountLedgers[who];
-        uint256 myBalance = myProfits - l.withdrawn + l.compensated - l.silenced;
 
         if (myBalance >= minWithdraw) {
             // Notice that here cannot set l.compensated = 0 ! need more testcases
             l.withdrawn += myBalance;
-            _totalWithdrawn += myBalance;
+            totalWithdrawn += myBalance;
 
             payable(who).transfer(myBalance);
             emit Withdraw(who, myBalance);
@@ -91,11 +112,11 @@ contract Profitable is MultiOwnable {
 
     function settleProfit(address sellerAddress, address buyerAddress, uint dealQuota) internal {
 
-        uint256 totalBalance = address(this).balance + _totalWithdrawn;
-        uint256 profitToSettle = totalBalance * dealQuota / 100;
+        uint256 profitComputed = sumProfit();
+        uint256 profitToSettle = profitComputed * dealQuota / 100;
 
         Ledger storage sellerLedger = _accountLedgers[sellerAddress];
-        sellerLedger.compensated += profitToSettle;    // No matter whether seller has withdrawn or not. The record should be ledged.
+        sellerLedger.compensated += profitToSettle;    // No matter whether seller has withdrawn or not. The amount should be ledged.
 
         Ledger storage buyerLedger = _accountLedgers[buyerAddress];
         buyerLedger.silenced += profitToSettle;

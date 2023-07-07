@@ -39,6 +39,10 @@ contract Tradeable is Profitable {
         emit AllowQuota(who, previousQuota, allowedQuota);
     }
 
+    function getAllowedQuotas(address who) public view returns(uint) {
+        return _allowedQuotas[who];
+    }
+
     // Total quotas now allocatable.
     function sumAllowedQuota() public view returns(uint) {
         uint sum = 0;
@@ -55,19 +59,19 @@ contract Tradeable is Profitable {
         require(fromOwner != toOwner);
         require(0 < quotaToMove && quotaToMove <= 100);
 
-        // validate fromOwner
+        // Validate fromOwner
         uint fromOwnerQuota = _ownedQuotas[fromOwner];
         uint fromOwnerAllowed = _allowedQuotas[fromOwner];
         require(fromOwnerQuota >= quotaToMove, "LACK_OF_QUOTA");
         require(fromOwnerAllowed >= quotaToMove, "LACK_OF_ALLOW");
 
-        // reduce amount from fromOwner
+        // Reduce amount from fromOwner
         if (fromOwnerQuota == quotaToMove) {
-            // remove fromOwner when it would reduce all its quotas
+            // Remove fromOwner when it would reduce all its quotas
             delete _ownedQuotas[fromOwner];
             delete _allowedQuotas[fromOwner];
 
-            // use last one to replace it in the table of addresses
+            // Use last one to replace it in the table of addresses
             uint fromOwnerIndex = _ownerSize;
             for (uint i=0; i<_ownerSize; i++) {
                 if (_ownerAddresses[i] == fromOwner) {
@@ -85,15 +89,15 @@ contract Tradeable is Profitable {
             emit RemoveOwner(fromOwner);
         }
         else {
-            // reduce fromOwner's quota
+            // Reduce fromOwner's quota
             _ownedQuotas[fromOwner] = fromOwnerQuota - quotaToMove;
             _allowedQuotas[fromOwner] = fromOwnerAllowed - quotaToMove;
         }
 
-        // add amount to toOwner
+        // Add amount to toOwner
         uint toOwnerQuota = _ownedQuotas[toOwner];
         if (toOwnerQuota == 0) {
-            // append a position for the new owner
+            // Append a position for the new owner
             _ownerAddresses[_ownerSize] = toOwner;
             _ownerSize ++;
             _ownedQuotas[toOwner] = quotaToMove;
@@ -102,22 +106,36 @@ contract Tradeable is Profitable {
             emit AppendOwner(toOwner);
         }
         else {
-            // if not new, plus amount
+            // If not new, plus amount
             _ownedQuotas[toOwner] += quotaToMove;
         }
 
         emit MoveQuota(fromOwner, toOwner, quotaToMove, _ownedQuotas[fromOwner], _ownedQuotas[toOwner]);
     }
 
-    // Randomly select allowed quotes to trade until budget is used up
-    // Return how many quotes bought.
-    function buyQuota() payable public returns(uint) {
+    // Compute the current price for each portion
+    function getPricePerQuota() public view returns(uint256) {
+        uint256 profitComputed = sumProfit();
+        uint256 pricePerQuota = profitComputed * priceEarningRatio / 100;
+        if (pricePerQuota < minPricePerQuota) {
+            pricePerQuota = minPricePerQuota;
+        }
+        return pricePerQuota;
+    }
 
-        // some preparations
-        address buyerAddress = msg.sender;
-        uint boughtQuota = 0;
+    // Randomly select allowed quotes to trade until the budget is used up
+    // Return how many quotes acquired.
+    // Before calling this function, EVM has already added the value(ETH) carried in this transaction on the contract balance.
+    function investAcquireQuota() payable public returns(uint) {
 
-        // select all addresses having quotas on sales into memory
+        // Investment cannot be treated as profits in following computing. It should be excluded at the beginning.
+        totalInvested += msg.value;
+
+        // Some preparations
+        address investorAddress = msg.sender;
+        uint acquiredQuota = 0;
+
+        // Select all addresses having quotas on sales into memory
         address[MAX_OWNER_SIZE] memory candidateAddresses;
         uint[MAX_OWNER_SIZE] memory candidateQuotas;
         uint candidateSize = 0;
@@ -131,24 +149,20 @@ contract Tradeable is Profitable {
             }
         }
 
-        // if no portion on sales: 1.stop execution  2.revert the ETH sent  3.return remaining gas
+        // If no portion on sales: 1.stop execution  2.revert the ETH sent  3.return remaining gas
         require(candidateSize > 0, "NO_QUOTA_AVAILABLE");
 
-        // compute the current price for each portion
-        uint256 totalBalance = address(this).balance + _totalWithdrawn;
-        uint256 pricePerQuota = totalBalance * priceEarningRatio / 100;
-        if (pricePerQuota < minPricePerQuota) {
-            pricePerQuota = minPricePerQuota;
-        }
+        // Compute the new owner can buy how many quotas by his budget
+        uint256 pricePerQuota = getPricePerQuota();
         uint wantQuotaRemain = uint(msg.value / pricePerQuota);
 
-        // begin the main loop
+        // Begin the main loop
         uint randomIndex = block.timestamp;
         uint loops = 0;
         while (loops < candidateSize && wantQuotaRemain > 0) {
             loops ++;
 
-            // no-repeat & approximate-random selection of the one of candidateAddresses
+            // No-repeat & approximate-random selection of the one of candidateAddresses
             randomIndex = (randomIndex + 997) % candidateSize;   // 997 is an any prime bigger than MAX_OWNER_SIZE
 
             address sellerAddress = candidateAddresses[randomIndex];
@@ -156,23 +170,23 @@ contract Tradeable is Profitable {
             uint dealQuota = (wantQuotaRemain > sellerQuota ? sellerQuota : wantQuotaRemain);
             assert(dealQuota > 0);
 
-            // settle profile correspond to trading quotas
-            settleProfit(sellerAddress, buyerAddress, dealQuota);
+            // Settle profile correspond to trading quotas
+            settleProfit(sellerAddress, investorAddress, dealQuota);
 
-            // settle payment of trading quotas
+            // Settle payment of trading quotas
             _accountLedgers[sellerAddress].compensated += pricePerQuota * dealQuota;
 
-            // move quotas
-            moveQuota(sellerAddress, buyerAddress, dealQuota);
+            // Deliver quotas
+            moveQuota(sellerAddress, investorAddress, dealQuota);
 
-            // compute remain
+            // Compute remain
             wantQuotaRemain -= dealQuota;
-            boughtQuota += dealQuota;
+            acquiredQuota += dealQuota;
         }
 
-        // remain budget as buyer's compensated
-        _accountLedgers[buyerAddress].compensated += msg.value - pricePerQuota * boughtQuota;
+        // Save the budget remained as investor's compensated
+        _accountLedgers[investorAddress].compensated += msg.value - pricePerQuota * acquiredQuota;
 
-        return boughtQuota;
+        return acquiredQuota;
     }
 }

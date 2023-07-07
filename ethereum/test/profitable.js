@@ -1,4 +1,3 @@
-// The methods of 'asset' in https://github.com/trufflesuite/truffle/blob/develop/packages/resolver/solidity/Assert.sol
 const Profitable = artifacts.require("Profitable");
 
 
@@ -25,10 +24,12 @@ contract('Profitable', (accounts) => {
         assert.equal(await web3.eth.getBalance(instance.address), web3.utils.toWei("0.04", "ether"))
 
         // owner1 withdraws
+        assert.equal(await instance.getBalance.call(accounts[8]), web3.utils.toWei("0.016", "ether"));
         await instance.withdraw({from: accounts[8]});
         let balance = await web3.eth.getBalance(accounts[8]);
         assert.isTrue(web3.utils.toWei("100.015", "ether") < balance && balance < web3.utils.toWei("100.016", "ether"));
         assert.equal(await web3.eth.getBalance(instance.address), web3.utils.toWei("0.024", "ether"));
+        assert.equal(await instance.getBalance.call(accounts[8]), 0);
 
         // malicious non-owner withdraw
         try {
