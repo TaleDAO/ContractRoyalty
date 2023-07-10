@@ -40,7 +40,7 @@ contract Tradeable is Profitable {
         emit AllowQuota(who, previousQuota, allowedQuota);
     }
 
-    function getAllowedQuotas(address who) public view returns(uint) {
+    function getAllowedQuota(address who) public view returns(uint) {
         return _allowedQuotas[who];
     }
 
@@ -62,15 +62,12 @@ contract Tradeable is Profitable {
 
         // Validate fromOwner
         uint fromOwnerQuota = _ownedQuotas[fromOwner];
-        uint fromOwnerAllowed = _allowedQuotas[fromOwner];
         require(fromOwnerQuota >= quotaToMove, "LACK_OF_QUOTA");
-        require(fromOwnerAllowed >= quotaToMove, "LACK_OF_ALLOW");
 
         // Reduce amount from fromOwner
         if (fromOwnerQuota == quotaToMove) {
             // Remove fromOwner when it would reduce all its quotas
             delete _ownedQuotas[fromOwner];
-            delete _allowedQuotas[fromOwner];
 
             // Use last one to replace it in the table of addresses
             uint fromOwnerIndex = _ownerSize;
@@ -92,7 +89,6 @@ contract Tradeable is Profitable {
         else {
             // Reduce fromOwner's quota
             _ownedQuotas[fromOwner] = fromOwnerQuota - quotaToMove;
-            _allowedQuotas[fromOwner] = fromOwnerAllowed - quotaToMove;
         }
 
         // Add amount to toOwner
@@ -102,7 +98,6 @@ contract Tradeable is Profitable {
             _ownerAddresses[_ownerSize] = toOwner;
             _ownerSize ++;
             _ownedQuotas[toOwner] = quotaToMove;
-            _allowedQuotas[toOwner] = 0;     // this step can be ignored for saving gas.
 
             emit AppendOwner(toOwner);
         }
@@ -126,10 +121,11 @@ contract Tradeable is Profitable {
 
     // To fairness, RANDOMLY select allowed quotes to trade until the budget is used up
     // Return how many quotes acquired.
-    // Before calling this function, EVM has already added the value(ETH) carried in this transaction on the contract balance.
-    function investAcquireQuota() payable public returns(uint) {
+    function investForQuota() payable external returns(uint) {
 
-        // Investment cannot be treated as profits in following computing. It should be excluded at the beginning.
+        // Before calling this function, EVM has already added the value(ETH) of this transaction on the contract balance.
+        // Because investment cannot be treated as profits in following computing,
+        // the value should be counted at the beginning then excluded in the following.
         totalInvested += msg.value;
 
         // Some preparations
@@ -138,14 +134,14 @@ contract Tradeable is Profitable {
 
         // Select all addresses having quotas on sales into memory
         address[MAX_OWNER_SIZE] memory candidateAddresses;
-        uint[MAX_OWNER_SIZE] memory candidateQuotas;
+        uint[MAX_OWNER_SIZE] memory candidateAllowedQuotas;
         uint candidateSize = 0;
         for (uint i=0; i<_ownerSize; i++) {
             address a = _ownerAddresses[i];
             uint q = _allowedQuotas[a];
             if (q > 0) {
                 candidateAddresses[candidateSize] = a;
-                candidateQuotas[candidateSize] = q;
+                candidateAllowedQuotas[candidateSize] = q;
                 candidateSize ++;
             }
         }
@@ -167,8 +163,8 @@ contract Tradeable is Profitable {
             randomIndex = (randomIndex + 997) % candidateSize;   // 997 is an any prime bigger than MAX_OWNER_SIZE
 
             address sellerAddress = candidateAddresses[randomIndex];
-            uint sellerQuota = candidateQuotas[randomIndex];
-            uint dealQuota = (wantQuotaRemain > sellerQuota ? sellerQuota : wantQuotaRemain);
+            uint sellerAllowedQuota = candidateAllowedQuotas[randomIndex];
+            uint dealQuota = (wantQuotaRemain > sellerAllowedQuota ? sellerAllowedQuota : wantQuotaRemain);
             assert(dealQuota > 0);
 
             // Settle profile correspond to trading quotas
@@ -179,6 +175,7 @@ contract Tradeable is Profitable {
 
             // Deliver quotas
             moveQuota(sellerAddress, investorAddress, dealQuota);
+            _allowedQuotas[sellerAddress] = sellerAllowedQuota - dealQuota;
 
             // Compute remain
             wantQuotaRemain -= dealQuota;
@@ -190,5 +187,30 @@ contract Tradeable is Profitable {
 
         return acquiredQuota;
     }
+
+    // The caller who gives 'dealQuota' to the 'newOwner' freely should have enough quota (>= dealQuota)
+    function giftAwayQuota(address newOwner, uint dealQuota) external {
+        require(0 < dealQuota);
+        address senderAddress = msg.sender;
+        uint oq = _ownedQuotas[senderAddress];
+        require(oq >= dealQuota);
+
+        // Settle profile correspond to trading quotas
+        settleProfit(senderAddress, newOwner, dealQuota);
+
+        // Deliver quotas
+        moveQuota(senderAddress, newOwner, dealQuota);
+
+        // Gift does NOT cost the amount of allowed quotas.
+        // But need to ensure the allowed quota would not exceed the new owned quota
+        oq -= dealQuota;
+        assert(oq == _ownedQuotas[senderAddress]);
+        uint aq = _allowedQuotas[senderAddress];
+        if (aq > oq) {
+            _allowedQuotas[senderAddress] = oq;
+        }
+
+    }
+
 }
 

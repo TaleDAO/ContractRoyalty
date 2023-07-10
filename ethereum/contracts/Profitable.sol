@@ -75,28 +75,28 @@ contract Profitable is MultiOwnable {
 
         uint256 myProfits = profitComputed * myQuota / 100;
         Ledger storage l = _accountLedgers[who];
-        uint256 myBalance = myProfits - l.withdrawn + l.compensated - l.silenced;
+        uint256 myBalance = myProfits + l.compensated - l.withdrawn - l.silenced;
 
-        if (myQuota == 0) {
-            require(myBalance == 0);
-        }
         return myBalance;
     }
 
-    // According to quotas owned, an owner can withdraw his whole profits in current time.
+    // According to ledgers, an owner(or previous owner) can withdraw his whole profits
     // Not support withdraw a part of profits
     // Replace previous function named 'divvy'
     function withdraw() external returns(bool) {
         address who = msg.sender;
 
         uint myQuota = _ownedQuotas[who];
-        require(1 <= myQuota && myQuota <= 100, "NOT_OWNER");
 
+        // All depend the amount of computed balance.
         uint256 myBalance = getBalance(who);
-        Ledger storage l = _accountLedgers[who];
+
+        // Should be the owner in current, or previous owner but something remained.
+        require(myQuota > 0 || myBalance > 0, "NOTHING_WITHDRAW");
 
         if (myBalance >= minWithdraw) {
-            // Notice that here cannot set l.compensated = 0 ! need more testcases
+            Ledger storage l = _accountLedgers[who];
+            // Caution that here cannot set l.compensated = 0 ! need more testcases
             l.withdrawn += myBalance;
             totalWithdrawn += myBalance;
 
