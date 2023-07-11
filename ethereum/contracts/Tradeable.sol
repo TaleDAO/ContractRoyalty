@@ -123,6 +123,8 @@ contract Tradeable is Profitable {
     // Return how many quotes acquired.
     function investForQuota() payable external returns(uint) {
 
+        require(! isTerminated, "TERMINATED");
+
         // Before calling this function, EVM has already added the value(ETH) of this transaction on the contract balance.
         // Because investment cannot be treated as profits in following computing,
         // the value should be counted at the beginning then excluded in the following.
@@ -190,6 +192,7 @@ contract Tradeable is Profitable {
 
     // The caller who gives 'dealQuota' to the 'newOwner' freely should have enough quota (>= dealQuota)
     function giftAwayQuota(address newOwner, uint dealQuota) external {
+        require(! isTerminated, "TERMINATED");
         require(0 < dealQuota);
         address senderAddress = msg.sender;
         uint oq = _ownedQuotas[senderAddress];

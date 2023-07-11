@@ -4,7 +4,7 @@ contract('Tradeable', (accounts) => {
 
     var BN = web3.utils.BN;
 
-    it('CASE_C_01 allow_quota invest_purchase', async () => {
+    it('CASE_C_01 buy & allow & invest', async () => {
 
         const instance = await Tradeable.new([accounts[8], accounts[9]], [40, 60], {
             from: accounts[0]

@@ -31,7 +31,7 @@ contract DaoRoyalty is Tradeable {
 	}
 
 	function validatePurchasePrice(uint256 price) internal pure {
-	    require(0 < price && price <= 100 ether);
+	    require(0 < price && price <= 1 ether);
 	}
 
 	function validatePriceEarningRatio(uint ratio) internal pure {
@@ -48,6 +48,11 @@ contract DaoRoyalty is Tradeable {
     function setPriceEarningRatio(uint ratio) voteAtLeast(67, keccak256(msg.data), string("SET_PRICE_EARNING_RATIO")) external {
         validatePriceEarningRatio(ratio);
         priceEarningRatio = ratio;
+    }
+
+    // Require approval % > 2/3
+    function setTerminated() voteAtLeast(67, keccak256(msg.data), string("SET_TERMINATE")) external {
+        isTerminated = true;
     }
 
 }

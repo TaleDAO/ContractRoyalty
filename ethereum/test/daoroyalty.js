@@ -35,6 +35,35 @@ contract('DaoRoyalty', (accounts) => {
         await instance.setPriceEarningRatio(2, {from: accounts[8]});
         assert.equal(await instance.priceEarningRatio.call(), 2);
 
+        // terminating not effect
+        await instance.setTerminated({from: accounts[8]});
+        console.log("isTerminated", await instance.isTerminated.call());
+
+        await web3.eth.sendTransaction({
+            from: accounts[0],
+            to: instance.address,
+            value: (await instance.purchasePrice()).toString()
+        })
+
+        // terminating has effect
+        await instance.setTerminated({from: accounts[9]});
+        console.log("isTerminated", await instance.isTerminated.call());
+
+        // buying is rejected
+        raiseError = null;
+        try {
+            await web3.eth.sendTransaction({
+                from: accounts[0],
+                to: instance.address,
+                value: (await instance.purchasePrice()).toString()
+            })
+        } catch(err) {
+            raiseError = err
+        }
+        assert.isTrue(raiseError !== null);
+        // it seams that in receive(), the message-str raised by require() cannot be caught by truffle test frameworks.
+        // The expected actions of raise & revert are OK
+
     });
 
 });

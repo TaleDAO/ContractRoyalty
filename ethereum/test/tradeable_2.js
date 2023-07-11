@@ -4,7 +4,14 @@ contract('Tradeable', (accounts) => {
 
     var BN = web3.utils.BN;
 
-    it('CASE_C_02 buy & gift & withdraw', async () => {
+    const isValueInRange = (val, min, max) => {
+        val = new BN(val);
+        min = new BN(min);
+        max = new BN(max);
+        return min < val && val < max;
+    }
+
+    it('CASE_C_02 gift & withdraw', async () => {
 
         const instance = await Tradeable.new([accounts[8], accounts[9]], [40, 60], {
             from: accounts[0]
@@ -60,6 +67,15 @@ contract('Tradeable', (accounts) => {
         }
         assert.equal(raiseError.reason, "NOTHING_WITHDRAW");
 
+        // withdraw can make it clear
+        await instance.withdraw({from: accounts[9]});
+        assert.isTrue(isValueInRange(
+            await web3.eth.getBalance(accounts[9]),
+            web3.utils.toWei("100.20", "ether"),
+            web3.utils.toWei("100.218", "ether")
+        ));
+
+        assert.equal(await web3.eth.getBalance(instance.address), 0);
     });
 
 });

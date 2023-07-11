@@ -13,6 +13,10 @@ contract Profitable is MultiOwnable {
     uint256 public minWithdraw = 0.01 ether;
     uint256 public minRefund = 0.005 ether;
 
+    // A safety flag. Once the contract is no longer on services, it will reject funding, quota-moving, etc.
+    // But withdrawing previous profits is still OK
+    bool public isTerminated = false;
+
     struct Ledger {
         // The ETH already withdrawn by this owner
         uint withdrawn;
@@ -43,7 +47,9 @@ contract Profitable is MultiOwnable {
 	    return profitComputed;
 	}
 
-	receive() payable external {
+	receive() external payable {
+
+	    require(! isTerminated, "TERMINATED");
         require(msg.value >= purchasePrice);
 
         address who = msg.sender;
@@ -58,8 +64,8 @@ contract Profitable is MultiOwnable {
     }
 
     // Called by the broker who writes back the purchased incomes & events in batches every day
-    // Replace previous function named 'buyRollUps'
     function receiveFrom(address[] memory buyers) payable public {
+	    require(! isTerminated, "TERMINATED");
         address brokerAddress = msg.sender;
         require(buyers.length > 0);
         require(purchasePrice * buyers.length <= msg.value && msg.value < purchasePrice * buyers.length + minRefund);
@@ -80,11 +86,14 @@ contract Profitable is MultiOwnable {
         return myBalance;
     }
 
-    // According to ledgers, an owner(or previous owner) can withdraw his whole profits
-    // Not support withdraw a part of profits
-    // Replace previous function named 'divvy'
     function withdraw() external returns(bool) {
         address who = msg.sender;
+        return withdrawFrom(who);
+    }
+
+    // According to ledgers, an owner(or previous owner) can withdraw his whole profits
+    // Not support withdraw a part of profits
+    function withdrawFrom(address who) internal returns(bool) {
 
         uint myQuota = _ownedQuotas[who];
 
