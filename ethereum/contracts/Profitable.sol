@@ -11,10 +11,9 @@ contract Profitable is MultiOwnable {
 
     uint256 public purchasePrice = 0.01 ether;
     uint256 public minWithdraw = 0.01 ether;
-    uint256 public minRefund = 0.005 ether;
 
     // A safety flag. Once the contract is no longer on services, it will reject funding, quota-moving, etc.
-    // But withdrawing previous profits is still OK
+    // But withdrawing existed profits is still supported.
     bool public isTerminated = false;
 
     struct Ledger {
@@ -32,8 +31,9 @@ contract Profitable is MultiOwnable {
 
     uint256 public totalWithdrawn;
 
-    // The amount cannot be treated as profits. (e.g. income from traded-quotas, which only belongs to one certain owner)
-    uint256 public totalInvested;
+    // The amount cannot be treated as profits. (e.g. income from traded-quotas, which only belongs to one certain owner
+    // Overpaid money need to be refunded to buyer)
+    uint256 public totalSilenced;
 
     event Purchase(address indexed who, uint256 value, address broker);
     event Withdraw(address indexed who, uint256 value);
@@ -43,7 +43,7 @@ contract Profitable is MultiOwnable {
 	}
 
 	function sumProfit() public view returns(uint256) {
-	    uint256 profitComputed = address(this).balance + totalWithdrawn - totalInvested;
+	    uint256 profitComputed = address(this).balance + totalWithdrawn - totalSilenced;
 	    return profitComputed;
 	}
 
@@ -56,8 +56,12 @@ contract Profitable is MultiOwnable {
 
         // Refund excess money if more than a threshold
         uint256 excessAmount = msg.value - purchasePrice;
-        if (excessAmount >= minRefund) {
-            payable(who).transfer(excessAmount);   // Prevent using call() or send()
+
+        // No longer transfer back at once. Instead, save in ledger. Buyer can withdraw the overpaid amount in any time.
+        if (excessAmount > 0) {
+            Ledger storage l = _accountLedgers[who];
+            l.compensated += excessAmount;
+            totalSilenced += excessAmount;
         }
 
         emit Purchase(who, msg.value, address(0x0));
@@ -68,7 +72,7 @@ contract Profitable is MultiOwnable {
 	    require(! isTerminated, "TERMINATED");
         address brokerAddress = msg.sender;
         require(buyers.length > 0);
-        require(purchasePrice * buyers.length <= msg.value && msg.value < purchasePrice * buyers.length + minRefund);
+        require(purchasePrice * buyers.length == msg.value);   // the call from a broker must be accurate
 
         for (uint i=0; i<buyers.length; ++i) {
             emit Purchase(buyers[i], purchasePrice, brokerAddress);
@@ -80,7 +84,7 @@ contract Profitable is MultiOwnable {
         uint myQuota = _ownedQuotas[who];
 
         uint256 myProfits = profitComputed * myQuota / 100;
-        Ledger storage l = _accountLedgers[who];
+        Ledger memory l = _accountLedgers[who];
         uint256 myBalance = myProfits + l.compensated - l.withdrawn - l.silenced;
 
         return myBalance;
@@ -91,7 +95,7 @@ contract Profitable is MultiOwnable {
         return withdrawFrom(who);
     }
 
-    // According to ledgers, an owner(or previous owner) can withdraw his whole profits
+    // According to ledgers, an owner(or previous owner, or overpaid buyer) can withdraw his whole profits
     // Not support withdraw a part of profits
     function withdrawFrom(address who) internal returns(bool) {
 
@@ -105,7 +109,7 @@ contract Profitable is MultiOwnable {
 
         if (myBalance >= minWithdraw) {
             Ledger storage l = _accountLedgers[who];
-            // Caution that here cannot set l.compensated = 0 ! need more testcases
+            // Caution that here cannot set l.compensated = 0
             l.withdrawn += myBalance;
             totalWithdrawn += myBalance;
 

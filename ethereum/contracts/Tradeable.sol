@@ -128,7 +128,7 @@ contract Tradeable is Profitable {
         // Before calling this function, EVM has already added the value(ETH) of this transaction on the contract balance.
         // Because investment cannot be treated as profits in following computing,
         // the value should be counted at the beginning then excluded in the following.
-        totalInvested += msg.value;
+        totalSilenced += msg.value;
 
         // Some preparations
         address investorAddress = msg.sender;
@@ -184,7 +184,7 @@ contract Tradeable is Profitable {
             acquiredQuota += dealQuota;
         }
 
-        // Save the budget remained as investor's compensated
+        // Save the budget remained into investor's compensated
         _accountLedgers[investorAddress].compensated += msg.value - pricePerQuota * acquiredQuota;
 
         return acquiredQuota;

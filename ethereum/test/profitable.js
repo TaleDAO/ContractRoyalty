@@ -22,15 +22,17 @@ contract('Profitable', (accounts) => {
         await web3.eth.sendTransaction({
             from: accounts[0],
             to: instance.address,
-            value: (await instance.purchasePrice()).toString()
+            value: web3.utils.toWei("1.01", "ether"),
         })
 
         // buy in batches from the broker
-        const value = web3.utils.toWei("0.03", "ether");
-        await instance.receiveFrom([accounts[1], accounts[2], accounts[3]], {from: accounts[0], value});
+        await instance.receiveFrom([accounts[1], accounts[2], accounts[3]], {
+            from: accounts[0],
+            value: web3.utils.toWei("0.03", "ether"),
+        });
 
         // check the balance
-        assert.equal(await web3.eth.getBalance(instance.address), web3.utils.toWei("0.04", "ether"))
+        assert.equal(await web3.eth.getBalance(instance.address), web3.utils.toWei("1.04", "ether"))
 
         // owner1 withdraws
         assert.equal(await instance.getBalance.call(accounts[8]), web3.utils.toWei("0.016", "ether"));
@@ -40,12 +42,12 @@ contract('Profitable', (accounts) => {
             web3.utils.toWei("100.015", "ether"),
             web3.utils.toWei("100.016", "ether")
         ));
-        assert.equal(await web3.eth.getBalance(instance.address), web3.utils.toWei("0.024", "ether"));
+        assert.equal(await web3.eth.getBalance(instance.address), web3.utils.toWei("1.024", "ether"));
         assert.equal(await instance.getBalance.call(accounts[8]), 0);
 
         // malicious non-owner withdraw
         try {
-            await instance.withdraw({from: accounts[0]});
+            await instance.withdraw({from: accounts[1]});
         } catch(err) {
             raiseError = err
         }
@@ -58,7 +60,7 @@ contract('Profitable', (accounts) => {
             web3.utils.toWei("100.023", "ether"),
             web3.utils.toWei("100.024", "ether")
         ));
-        assert.equal(await web3.eth.getBalance(instance.address), 0);
+        assert.equal(await web3.eth.getBalance(instance.address), web3.utils.toWei("1", "ether"));
 
         // owner2 withdraws again
         await instance.withdraw({from: accounts[9]});
@@ -67,8 +69,19 @@ contract('Profitable', (accounts) => {
             web3.utils.toWei("100.023", "ether"),
             web3.utils.toWei("100.024", "ether")
         ));
+        assert.equal(await web3.eth.getBalance(instance.address), web3.utils.toWei("1", "ether"));
+
+        // overpaid buyer withdraw
+        await instance.withdraw({from: accounts[0]});
         assert.equal(await web3.eth.getBalance(instance.address), 0);
 
+        // overpaid buyer withdraw again
+        try {
+            await instance.withdraw({from: accounts[0]});
+        } catch(err) {
+            raiseError = err
+        }
+        assert.equal(raiseError.reason, "NOTHING_WITHDRAW");
     });
 
 });

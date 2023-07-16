@@ -37,7 +37,7 @@ contract('DaoRoyalty', (accounts) => {
 
         // terminating not effect
         await instance.setTerminated({from: accounts[8]});
-        console.log("isTerminated", await instance.isTerminated.call());
+        assert.isFalse(await instance.isTerminated.call());
 
         await web3.eth.sendTransaction({
             from: accounts[0],
@@ -47,7 +47,7 @@ contract('DaoRoyalty', (accounts) => {
 
         // terminating has effect
         await instance.setTerminated({from: accounts[9]});
-        console.log("isTerminated", await instance.isTerminated.call());
+        assert.isTrue(await instance.isTerminated.call());
 
         // buying is rejected
         raiseError = null;
